@@ -1,0 +1,18 @@
+/* ===== WORKNEST GLOBAL THEME ===== */
+:root {
+    --bg-main: #f5f5f5;
+    --bg-card: #FFFFFF;
+    --bg-input: #FFFFFF;
+    --border-accent: #2AAA8A;
+    --border-light: #e0e0e0;
+    --primary-orange: #2AAA8A;
+    --primary-orange-dark: #238b72;
+    --primary-orange-light: #34d399;
+    --text-main: #333333;
+    --text-muted: #666666;
+    --text-light: #888888;
+    --shadow-sm: 0 2px 8px rgba(0,0,0,0.04);
+    --shadow-md: 0 4px 16px rgba(0,0,0,0.08);
+    --shadow-lg: 0 8px 32px rgba(0,0,0,0.12);
+    --shadow-orange: 0 4px 20px rgba(42, 170, 138, 0.25);
+}

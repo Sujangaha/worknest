@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WorkNest - Employee Management System</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="min-h-screen bg-gray-50">
+    <!-- Header -->
+    <header class="bg-white border-b border-gray-200 sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">
+            <div class="flex items-center gap-3">
+                <span class="text-3xl">🏢</span>
+                <span class="text-2xl font-bold text-[#2AAA8A]">WorkNest</span>
+            </div>
+            <nav class="hidden md:flex items-center gap-8">
+                <a href="#features" class="text-stone-600 hover:text-[#2AAA8A] transition-colors">Features</a>
+                <a href="#about" class="text-stone-600 hover:text-[#2AAA8A] transition-colors">About</a>
+                <a href="#contact" class="text-stone-600 hover:text-[#2AAA8A] transition-colors">Contact</a>
+            </nav>
+            <a href="login.php?ref=landing" class="px-6 py-2.5 bg-[#2AAA8A] hover:bg-[#238b72] text-white font-semibold rounded-lg shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-0.5">
+                Login
+            </a>
+        </div>
+    </header>
+
+    <!-- Hero Section -->
+    <section class="min-h-screen flex items-center justify-center px-6 py-20">
+        <div class="max-w-7xl mx-auto w-full">
+            <div class="grid lg:grid-cols-2 gap-12 items-center">
+                <!-- Left Side: Content -->
+                <div class="animate-fade-in">
+                    <h1 class="text-4xl md:text-5xl lg:text-6xl font-bold text-black leading-tight mb-6">
+                        Streamline Your <span class="text-[#2AAA8A]">Workforce</span>
+                    </h1>
+                    <p class="text-lg md:text-xl text-stone-600 mb-8 leading-relaxed">
+                        Manage employees, attendance, salaries, and tasks efficiently. WorkNest simplifies HR operations with an intuitive, modern platform.
+                    </p>
+                    <div class="flex flex-wrap gap-4">
+                        <button onclick="redirectToLogin()" class="px-8 py-4 bg-[#2AAA8A] hover:bg-[#238b72] text-white font-semibold rounded-xl shadow-lg hover:shadow-2xl transition-all duration-300 hover:-translate-y-1 text-lg">
+                            Get Started
+                        </button>
+                        <a href="#features" class="px-8 py-4 border-2 border-[#2AAA8A] text-[#2AAA8A] hover:bg-[#2AAA8A] hover:text-white font-semibold rounded-xl transition-all duration-300 hover:-translate-y-1 text-lg">
+                            Learn More
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Right Side: Image -->
+                <div class="animate-fade-in-delay">
+                    <div class="bg-white rounded-2xl border border-gray-200 p-8 shadow-2xl">
+                        <div class="relative overflow-hidden rounded-xl">
+                            <img src="images/ems.jpg" alt="Employee Management" class="w-full h-auto rounded-xl object-cover">
+                            <div class="absolute inset-0 bg-gradient-to-t from-[#2AAA8A]/30 to-transparent"></div>
+                            
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Features Section -->
+    <section id="features" class="py-20 px-6 bg-white">
+        <div class="max-w-7xl mx-auto">
+            <div class="text-center mb-16">
+                <h2 class="text-3xl md:text-4xl font-bold text-black mb-4">Powerful Features</h2>
+                <p class="text-stone-600 text-lg max-w-2xl mx-auto">Everything you need to manage your workforce efficiently in one place.</p>
+            </div>
+            
+            <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+                <!-- Feature 1 -->
+                <div class="bg-white rounded-2xl border border-gray-200 p-8 hover:border-[#2AAA8A] hover:shadow-xl transition-all duration-300 hover:-translate-y-2">
+                    <div class="w-14 h-14 bg-[#2AAA8A] rounded-xl flex items-center justify-center mb-6">
+                        <span class="text-2xl">👥</span>
+                    </div>
+                    <h3 class="text-xl font-bold text-black mb-3">Employee Management</h3>
+                    <p class="text-stone-600">Easily manage employee records, profiles, and information all in one centralized dashboard.</p>
+                </div>
+
+                <!-- Feature 2 -->
+                <div class="bg-white rounded-2xl border border-gray-200 p-8 hover:border-[#2AAA8A] hover:shadow-xl transition-all duration-300 hover:-translate-y-2">
+                    <div class="w-14 h-14 bg-[#2AAA8A] rounded-xl flex items-center justify-center mb-6">
+                        <span class="text-2xl">📅</span>
+                    </div>
+                    <h3 class="text-xl font-bold text-black mb-3">Attendance Tracking</h3>
+                    <p class="text-stone-600">Track employee attendance, work hours, and leave management with automated reports.</p>
+                </div>
+
+
+                <!-- Feature 4 -->
+                <div class="bg-white rounded-2xl border border-gray-200 p-8 hover:border-[#2AAA8A] hover:shadow-xl transition-all duration-300 hover:-translate-y-2">
+                    <div class="w-14 h-14 bg-[#2AAA8A] rounded-xl flex items-center justify-center mb-6">
+                        <span class="text-2xl">📋</span>
+                    </div>
+                    <h3 class="text-xl font-bold text-black mb-3">Task Assignment</h3>
+                    <p class="text-stone-600">Assign tasks, set deadlines, and monitor progress with our intuitive task management system.</p>
+                </div>
+
+                <!-- Feature 5 -->
+                <div class="bg-white rounded-2xl border border-gray-200 p-8 hover:border-[#2AAA8A] hover:shadow-xl transition-all duration-300 hover:-translate-y-2">
+                    <div class="w-14 h-14 bg-[#2AAA8A] rounded-xl flex items-center justify-center mb-6">
+                        <span class="text-2xl">📢</span>
+                    </div>
+                    <h3 class="text-xl font-bold text-black mb-3">Announcements</h3>
+                    <p class="text-stone-600">Send company-wide notices and announcements to keep everyone informed and connected.</p>
+                </div>
+
+                <!-- Feature 6 -->
+                <div class="bg-white rounded-2xl border border-gray-200 p-8 hover:border-[#2AAA8A] hover:shadow-xl transition-all duration-300 hover:-translate-y-2">
+                    <div class="w-14 h-14 bg-[#2AAA8A] rounded-xl flex items-center justify-center mb-6">
+                        <span class="text-2xl">📊</span>
+                    </div>
+                    <h3 class="text-xl font-bold text-black mb-3">Reports & Analytics</h3>
+                    <p class="text-stone-600">Generate insightful reports and analytics to make data-driven HR decisions.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- About Section -->
+    <section id="about" class="py-20 px-6">
+        <div class="max-w-7xl mx-auto">
+            <div class="text-center mb-12">
+                <h2 class="text-3xl md:text-4xl font-bold text-black mb-4">Why Choose WorkNest?</h2>
+                <p class="text-stone-600 text-lg max-w-2xl mx-auto">WorkNest is designed to simplify the complexities of employee management.</p>
+            </div>
+            <div class="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
+                <div class="bg-white rounded-2xl border border-gray-200 p-6 text-center hover:border-[#2AAA8A] hover:shadow-xl transition-all duration-300 hover:-translate-y-2">
+                    <div class="w-14 h-14 bg-[#2AAA8A] rounded-full flex items-center justify-center text-white text-2xl mx-auto mb-4">✓</div>
+                    <h3 class="text-lg font-semibold text-black mb-2">Easy to Use</h3>
+                    <p class="text-stone-600 text-sm">Intuitive interface designed for everyone</p>
+                </div>
+                <div class="bg-white rounded-2xl border border-gray-200 p-6 text-center hover:border-[#2AAA8A] hover:shadow-xl transition-all duration-300 hover:-translate-y-2">
+                    <div class="w-14 h-14 bg-[#2AAA8A] rounded-full flex items-center justify-center text-white text-2xl mx-auto mb-4">🔒</div>
+                    <h3 class="text-lg font-semibold text-black mb-2">Secure Data</h3>
+                    <p class="text-stone-600 text-sm">Your data is protected with top security</p>
+                </div>
+                <div class="bg-white rounded-2xl border border-gray-200 p-6 text-center hover:border-[#2AAA8A] hover:shadow-xl transition-all duration-300 hover:-translate-y-2">
+                    <div class="w-14 h-14 bg-[#2AAA8A] rounded-full flex items-center justify-center text-white text-2xl mx-auto mb-4">⚡</div>
+                    <h3 class="text-lg font-semibold text-black mb-2">Real-time Updates</h3>
+                    <p class="text-stone-600 text-sm">Stay informed with instant notifications</p>
+                </div>
+                <div class="bg-white rounded-2xl border border-gray-200 p-6 text-center hover:border-[#2AAA8A] hover:shadow-xl transition-all duration-300 hover:-translate-y-2">
+                    <div class="w-14 h-14 bg-[#2AAA8A] rounded-full flex items-center justify-center text-white text-2xl mx-auto mb-4">👥</div>
+                    <h3 class="text-lg font-semibold text-black mb-2">Role-based Access</h3>
+                    <p class="text-stone-600 text-sm">Control who sees what with permissions</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+
+    <!-- Contact Section -->
+    <section id="contact" class="py-20 px-6 bg-white">
+        <div class="max-w-7xl mx-auto">
+            <div class="text-center mb-12">
+                <h2 class="text-3xl md:text-4xl font-bold text-black mb-4">Get In Touch</h2>
+                <p class="text-stone-600 text-lg max-w-2xl mx-auto">Have questions? We'd love to hear from you. Reach out through any of the channels below.</p>
+            </div>
+            <div class="grid md:grid-cols-3 gap-8 max-w-4xl mx-auto">
+                <div class="bg-white rounded-2xl border border-gray-200 p-8 text-center hover:border-[#2AAA8A] hover:shadow-xl transition-all duration-300 hover:-translate-y-2">
+                    <div class="w-16 h-16 bg-[#2AAA8A] rounded-full flex items-center justify-center mx-auto mb-4">
+                        <span class="text-3xl">📧</span>
+                    </div>
+                    <h3 class="text-xl font-semibold text-black mb-3">Email</h3>
+                    <p class="text-stone-600">sgm8877@gmail.com</p>
+                </div>
+                <div class="bg-white rounded-2xl border border-gray-200 p-8 text-center hover:border-[#2AAA8A] hover:shadow-xl transition-all duration-300 hover:-translate-y-2">
+                    <div class="w-16 h-16 bg-[#2AAA8A] rounded-full flex items-center justify-center mx-auto mb-4">
+                        <span class="text-3xl">📞</span>
+                    </div>
+                    <h3 class="text-xl font-semibold text-black mb-3">Phone</h3>
+                    <p class="text-stone-600">9845649900</p>
+                </div>
+                <div class="bg-white rounded-2xl border border-gray-200 p-8 text-center hover:border-[#2AAA8A] hover:shadow-xl transition-all duration-300 hover:-translate-y-2">
+                    <div class="w-16 h-16 bg-[#2AAA8A] rounded-full flex items-center justify-center mx-auto mb-4">
+                        <span class="text-3xl">📍</span>
+                    </div>
+                    <h3 class="text-xl font-semibold text-black mb-3">Location</h3>
+                    <p class="text-stone-600">Swoyambhu, Kathmandu</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="bg-gray-50 py-12 px-6 border-t border-gray-200">
+        <div class="max-w-7xl mx-auto">
+            <div class="grid md:grid-cols-4 gap-8 mb-8">
+                <div>
+                    <div class="flex items-center gap-3 mb-4">
+                        <span class="text-2xl">🏢</span>
+                        <span class="text-xl font-bold text-[#2AAA8A]">WorkNest</span>
+                    </div>
+                    <p class="text-stone-600 text-sm">Simplifying workforce management for modern businesses.</p>
+                </div>
+                <div>
+                    <h4 class="text-stone-800 font-semibold mb-4">Quick Links</h4>
+                    <ul class="space-y-2">
+                        <li><a href="#features" class="text-stone-600 hover:text-[#2AAA8A] transition-colors text-sm">Features</a></li>
+                        <li><a href="#about" class="text-stone-600 hover:text-[#2AAA8A] transition-colors text-sm">About</a></li>
+                        <li><a href="#contact" class="text-stone-600 hover:text-[#2AAA8A] transition-colors text-sm">Contact</a></li>
+                    </ul>
+                </div>
+            
+            </div>
+            <div class="border-t border-gray-200 pt-8">
+                <p class="text-center text-stone-600 text-sm">&copy; 2025 WorkNest. All rights reserved.</p>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        function redirectToLogin() {
+            window.location.href = 'login.php';
+        }
+
+        // Smooth scroll for anchor links
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                document.querySelector(this.getAttribute('href')).scrollIntoView({
+                    behavior: 'smooth'
+                });
+            });
+        });
+    </script>
+
+    <style>
+        @keyframes fade-in {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fade-in {
+            animation: fade-in 0.6s ease-out;
+        }
+        .animate-fade-in-delay {
+            animation: fade-in 0.8s ease-out 0.2s backwards;
+        }
+        html {
+            scroll-behavior: smooth;
+        }
+    </style>
+</body>
+</html>
