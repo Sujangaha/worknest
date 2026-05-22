@@ -5,6 +5,41 @@ require_once '../../includes/db.php';
 $pdo = getPDO();
 $userId = $_SESSION['user_id'];
 
+// App settings for demo time
+$pdo->exec("\n    CREATE TABLE IF NOT EXISTS app_settings (\n        setting_key VARCHAR(64) PRIMARY KEY,\n        setting_value VARCHAR(255) NOT NULL\n    )\n");
+
+$settings = [];
+$stmt = $pdo->prepare("SELECT setting_key, setting_value FROM app_settings WHERE setting_key IN ('demo_time_enabled', 'demo_time_value', 'demo_time_anchor')");
+$stmt->execute();
+$settings = $stmt->fetchAll(PDO::FETCH_KEY_PAIR);
+
+$demoEnabled = ($settings['demo_time_enabled'] ?? '0') === '1';
+$demoTimeValue = $settings['demo_time_value'] ?? '';
+$demoTimeAnchor = isset($settings['demo_time_anchor']) ? (int)$settings['demo_time_anchor'] : 0;
+if ($demoTimeValue !== '' && strlen($demoTimeValue) === 5) {
+    $demoTimeValue .= ':00';
+}
+
+function timeToSeconds($timeValue) {
+    $parts = explode(':', $timeValue);
+    $hours = (int)($parts[0] ?? 0);
+    $minutes = (int)($parts[1] ?? 0);
+    $seconds = (int)($parts[2] ?? 0);
+    return ($hours * 3600) + ($minutes * 60) + $seconds;
+}
+
+if ($demoEnabled && $demoTimeValue) {
+    $baseSeconds = timeToSeconds($demoTimeValue);
+    $elapsed = $demoTimeAnchor > 0 ? (time() - $demoTimeAnchor) : 0;
+    $effectiveSeconds = ($baseSeconds + $elapsed) % 86400;
+    if ($effectiveSeconds < 0) {
+        $effectiveSeconds += 86400;
+    }
+    $effectiveTime = gmdate('H:i:s', $effectiveSeconds);
+} else {
+    $effectiveTime = date('H:i:s');
+}
+
 // Fetch logged-in employee data
 $stmt = $pdo->prepare("SELECT username, email, department, position FROM users WHERE id = ? AND role = 'employee'");
 $stmt->execute([$userId]);
@@ -160,9 +195,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     // Manual attendance for any date
     if ($_POST['action'] === 'manual_attendance') {
         $attendanceDate = $_POST['attendance_date'] ?? '';
-        $checkInTime = $_POST['check_in_time'] ?? '';
-        $checkOutTime = $_POST['check_out_time'] ?? '';
+        $checkInTime = trim($_POST['check_in_time'] ?? '');
+        $checkOutTime = trim($_POST['check_out_time'] ?? '');
         $status = $_POST['status'] ?? 'present';
+
+        if ($demoEnabled && $demoTimeValue) {
+            $checkInTime = $demoTimeValue;
+        }
+
+        if ($checkInTime !== '' && strlen($checkInTime) === 5) {
+            $checkInTime .= ':00';
+        }
+        if ($checkOutTime !== '' && strlen($checkOutTime) === 5) {
+            $checkOutTime .= ':00';
+        }
         
         if (empty($attendanceDate)) {
             $message = 'Please select a date!';
@@ -175,10 +221,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $messageType = 'error';
         } else {
             // Check if already exists - NO UPDATES ALLOWED
-            $stmt = $pdo->prepare("SELECT id FROM attendance WHERE user_id = ? AND attendance_date = ?");
+            $stmt = $pdo->prepare("SELECT id, status, check_in FROM attendance WHERE user_id = ? AND attendance_date = ?");
             $stmt->execute([$userId, $attendanceDate]);
             $existing = $stmt->fetch();
-            
+
             if ($existing) {
                 // Silently redirect - button should already be disabled/hidden
                 header('Location: attendance.php');
@@ -250,9 +296,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         $record = $stmt->fetch();
         
         if ($record && $record['check_in'] && !$record['check_out']) {
-            $currentTime = date('H:i:s');
+            $currentTime = $effectiveTime;
             $isAutoCheckout = isset($_POST['auto_checkout']) && $_POST['auto_checkout'] === '1';
             $forceHalfday = isset($_POST['force_halfday']) && $_POST['force_halfday'] === '1';
+
+            // In demo mode, ensure checkout time is after the demo check-in time
+            if ($demoEnabled && $demoTimeValue && $currentTime <= $record['check_in']) {
+                $currentTime = date('H:i:s', strtotime($record['check_in']) + 60);
+            }
             
             // Validate: checkout must be after check-in
             if ($currentTime <= $record['check_in']) {
@@ -263,11 +314,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 // or normal calculation based on total work hours
                 if ($forceHalfday && $isAutoCheckout) {
                     $finalStatus = 'halfday';
-                    $finalMessage = 'Auto checkout at ' . date('h:i A') . ' - outside office area at 3:00 PM (marked as Half Day).';
+                    $finalMessage = 'Auto checkout at ' . date('h:i A', strtotime($currentTime)) . ' - outside office area at 3:00 PM (marked as Half Day).';
                 } else {
                     $checkoutResult = getFinalStatusOnCheckout($record['check_in'], $currentTime);
                     $finalStatus = $checkoutResult['status'];
-                    $finalMessage = ($isAutoCheckout ? 'Auto checked out at ' : 'Checked out at ') . date('h:i A') . ' - ' . $checkoutResult['message'];
+                    $finalMessage = ($isAutoCheckout ? 'Auto checked out at ' : 'Checked out at ') . date('h:i A', strtotime($currentTime)) . ' - ' . $checkoutResult['message'];
                 }
 
                 // Update both checkout time and status
@@ -296,6 +347,7 @@ $checkInTime = $todayAttendance['check_in'] ?? null;
 $checkOutTime = $todayAttendance['check_out'] ?? null;
 $todayStatus = $todayAttendance['status'] ?? null;
 $attendanceExists = !empty($todayAttendance); // Track if any attendance record exists
+$canCheckInToday = !$attendanceExists;
 $isSaturday = (date('l') === 'Saturday'); // Check if today is a Holiday (Saturday)
 
 // Calculate duration
@@ -434,6 +486,7 @@ function getStatusBadge($status) {
                     <span></span>
                 </button>
                 <h1 class="page-title">Attendance</h1>
+                <div class="live-clock" id="attendanceClock" aria-live="polite"></div>
             </div>
 
             <div class="container">
@@ -467,7 +520,7 @@ function getStatusBadge($status) {
                                     <span class="complete-icon">🚫</span>
                                     <p>Attendance not allowed on Holiday</p>
                                 </div>
-                            <?php elseif (!$checkInTime): ?>
+                            <?php elseif (!$attendanceExists): ?>
                                 <form method="POST" id="checkinForm">
                                     <input type="hidden" name="action" value="manual_attendance">
                                     <input type="hidden" name="attendance_date" value="<?php echo $today; ?>">
@@ -478,13 +531,18 @@ function getStatusBadge($status) {
                                         <span class="btn-icon">⏱</span> CHECK IN
                                     </button>
                                 </form>
-                            <?php elseif (!$checkOutTime): ?>
+                            <?php elseif (!$checkOutTime && $todayStatus !== 'absent'): ?>
                                 <form method="POST" id="checkoutForm">
                                     <input type="hidden" name="action" value="checkout">
                                     <button type="button" class="checkout-btn" id="checkoutBtn" onclick="handleCheckOut()" disabled>
                                         <span class="btn-icon">🚪</span> CHECK OUT
                                     </button>
                                 </form>
+                            <?php elseif ($todayStatus === 'absent'): ?>
+                                <div class="attendance-complete absent-notice">
+                                    <span class="complete-icon">❌</span>
+                                    <p>Marked Absent for Today</p>
+                                </div>
                             <?php else: ?>
                                 <div class="attendance-complete">
                                     <span class="complete-icon">✅</span>
@@ -504,6 +562,25 @@ function getStatusBadge($status) {
                                 <div class="mini-stat">
                                     <span>Working Hours</span>
                                     <strong><?php echo $duration; ?></strong>
+                                </div>
+                                <div class="mini-stat">
+                                    <span>Status</span>
+                                    <?php
+                                    $statusLabel = '-';
+                                    $statusClass = '';
+                                    if ($todayStatus) {
+                                        $statusMap = [
+                                            'early' => ['✅ Early', 'status-early'],
+                                            'present' => ['✅ Present', 'status-present'],
+                                            'halfday' => ['⚠️ Half Day', 'status-halfday'],
+                                            'late' => ['⚠️ Late', 'status-halfday'],
+                                            'absent' => ['❌ Absent', 'status-absent']
+                                        ];
+                                        $statusLabel = $statusMap[$todayStatus][0] ?? '-';
+                                        $statusClass = $statusMap[$todayStatus][1] ?? '';
+                                    }
+                                    ?>
+                                    <strong class="<?php echo $statusClass; ?>"><?php echo $statusLabel; ?></strong>
                                 </div>
                             </div>
                         </div>
@@ -641,7 +718,7 @@ function getStatusBadge($status) {
                         </div>
                         <div class="rule-item">
                             <span class="rule-time">6:00 – 6:30 AM</span>
-                            <span class="rule-status early">Early (full shift till 2:30 PM)</span>
+                            <span class="rule-status early">Early </span>
                         </div>
                         <div class="rule-item">
                             <span class="rule-time">6:30 – 7:00 AM</span>
@@ -665,12 +742,11 @@ function getStatusBadge($status) {
                             <span class="rule-time">Shift End</span>
                             <span class="rule-status info">Standard shift end is 2:30 PM</span>
                         </div>
-                        <div class="rule-item">
+                     <!--<div class="rule-item">
                             <span class="rule-time">After 4:00 PM</span>
                             <span class="rule-status info">Work hours are capped at 4:00 PM for status</span>
                         </div>
 
-                        <!-- Final Decision by Work Hours -->
                         <div class="rule-item">
                             <span class="rule-time">Total Work Hours</span>
                             <span class="rule-status info">Final Status (Most Important)</span>
@@ -688,7 +764,6 @@ function getStatusBadge($status) {
                             <span class="rule-status absent">Absent</span>
                         </div>
 
-                        <!-- Location & Auto Rules -->
                         <div class="rule-item">
                             <span class="rule-time">Location</span>
                             <span class="rule-status info">Check-in &amp; Checkout only within 100m of office</span>
@@ -697,7 +772,7 @@ function getStatusBadge($status) {
                             <span class="rule-time">Auto Checkout</span>
                             <span class="rule-status info">If you forget, system auto-checks out at 3:00 PM.
                                 If you are outside office at that time, it marks Half Day.</span>
-                        </div>
+                        </div>-->
                     </div>
                 </div>
 
@@ -942,6 +1017,7 @@ body { background-color: var(--bg-main); }
 /* Top Bar */
 .top-bar { display: flex; align-items: center; gap: 16px; margin-bottom: 24px; }
 .page-title { font-size: 28px; font-weight: 800; color: var(--text-main); }
+.live-clock { margin-left: auto; font-size: 14px; font-weight: 700; color: var(--text-muted); background: var(--bg-card); border: 1px solid var(--border-light); padding: 6px 12px; border-radius: 999px; letter-spacing: 0.6px; min-width: 120px; text-align: center; }
 
 /* Hamburger */
 .hamburger {
@@ -1144,6 +1220,15 @@ body { background-color: var(--bg-main); }
     color: #6b7280;
 }
 
+.attendance-complete.absent-notice {
+    background: linear-gradient(135deg, #fef2f2, #fecaca);
+    border-color: #fca5a5;
+}
+
+.attendance-complete.absent-notice p {
+    color: #dc2626;
+}
+
 .today-attendance-mini {
     background: var(--bg-input);
     border: 1px solid var(--border-light);
@@ -1172,6 +1257,11 @@ body { background-color: var(--bg-main); }
     font-size: 14px;
     color: var(--text-main);
 }
+
+.mini-stat strong.status-absent { color: #dc2626; }
+.mini-stat strong.status-present { color: #16a34a; }
+.mini-stat strong.status-halfday { color: #d97706; }
+.mini-stat strong.status-early { color: #6366f1; }
 
 .map-section {
     display: flex;
@@ -1503,6 +1593,10 @@ body { background-color: var(--bg-main); }
 </style>
 
     <script>
+        const DEMO_TIME_ENABLED = <?php echo $demoEnabled ? 'true' : 'false'; ?>;
+        const DEMO_TIME_VALUE = <?php echo json_encode($demoTimeValue); ?>;
+        const DEMO_TIME_ANCHOR = <?php echo json_encode($demoTimeAnchor); ?>;
+
         // Sidebar Toggle
         function toggleSidebar() {
             const sidebar = document.getElementById('sidebar');
@@ -1510,6 +1604,51 @@ body { background-color: var(--bg-main); }
             sidebar.classList.toggle('open');
             overlay.classList.toggle('active');
             document.body.classList.toggle('sidebar-open');
+        }
+
+        function timeToSeconds(timeValue) {
+            const parts = timeValue.split(':');
+            const hours = parseInt(parts[0] || '0', 10);
+            const minutes = parseInt(parts[1] || '0', 10);
+            const seconds = parseInt(parts[2] || '0', 10);
+            return (hours * 3600) + (minutes * 60) + seconds;
+        }
+
+        function getEffectiveNow() {
+            if (!DEMO_TIME_ENABLED || !DEMO_TIME_VALUE) {
+                return new Date();
+            }
+
+            const anchor = DEMO_TIME_ANCHOR ? new Date(DEMO_TIME_ANCHOR * 1000) : new Date();
+            const elapsedSeconds = Math.floor((Date.now() - anchor.getTime()) / 1000);
+            const baseSeconds = timeToSeconds(DEMO_TIME_VALUE);
+            const effectiveSeconds = (baseSeconds + elapsedSeconds) % 86400;
+
+            const effective = new Date();
+            effective.setHours(0, 0, 0, 0);
+            effective.setSeconds(effectiveSeconds);
+            return effective;
+        }
+
+        function formatClockTime(date) {
+            let hours = date.getHours();
+            const minutes = date.getMinutes();
+            const seconds = date.getSeconds();
+            const period = hours >= 12 ? 'pm' : 'am';
+            hours = hours % 12;
+            hours = hours ? hours : 12;
+
+            const hh = String(hours).padStart(2, '0');
+            const mm = String(minutes).padStart(2, '0');
+            const ss = String(seconds).padStart(2, '0');
+
+            return `${hh}:${mm}:${ss} ${period}`;
+        }
+
+        function updateAttendanceClock() {
+            const clock = document.getElementById('attendanceClock');
+            if (!clock) return;
+            clock.textContent = formatClockTime(getEffectiveNow());
         }
 
         // Pie Chart (Attendance Status Distribution)
@@ -1553,9 +1692,7 @@ body { background-color: var(--bg-main); }
             }
         });
         
-        // ===== GEOLOCATION ATTENDANCE =====
-        
-       
+      
         const OFFICE_LAT = 27.725677; 
         const OFFICE_LNG = 85.2738099; 
         const ALLOWED_RADIUS = 100; 
@@ -1563,8 +1700,7 @@ body { background-color: var(--bg-main); }
         const OFFICE_LAT = 27.7186653; 
         const OFFICE_LNG = 85.3152641; 
         const ALLOWED_RADIUS = 100; 
-         */
-
+        */
         const AUTO_CHECKOUT_HOUR = 15;  // 3:00 PM
         const AUTO_CHECKOUT_MINUTE = 0;
         const FULLDAY_WORK_HOURS_JS = <?php echo FULLDAY_WORK_HOURS; ?>;
@@ -1587,7 +1723,6 @@ body { background-color: var(--bg-main); }
                       Math.sin(Δλ/2) * Math.sin(Δλ/2);
             const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
             
-            // Distance in meters using the haversine formula
             return R * c;
         }
         
@@ -1673,10 +1808,10 @@ body { background-color: var(--bg-main); }
         function enableButtons() {
             const checkinBtn = document.getElementById('checkinBtn');
             const checkoutBtn = document.getElementById('checkoutBtn');
-            const attendanceExists = <?php echo $attendanceExists ? 'true' : 'false'; ?>;
+            const canCheckIn = <?php echo $canCheckInToday ? 'true' : 'false'; ?>;
             
-            // Only enable check-in if no attendance exists yet AND within radius
-            if (checkinBtn && !attendanceExists) checkinBtn.disabled = false;
+            // Only enable check-in if no check-in time is set yet AND within radius
+            if (checkinBtn && canCheckIn) checkinBtn.disabled = false;
             // Enable checkout only when within radius
             if (checkoutBtn) checkoutBtn.disabled = false;
         }
@@ -1699,8 +1834,8 @@ body { background-color: var(--bg-main); }
             }
             
             // Double-check attendance doesn't already exist
-            const attendanceExists = <?php echo $attendanceExists ? 'true' : 'false'; ?>;
-            if (attendanceExists) {
+            const canCheckIn = <?php echo $canCheckInToday ? 'true' : 'false'; ?>;
+            if (!canCheckIn) {
                 alert('Attendance for today is already recorded.');
                 return;
             }
@@ -1717,8 +1852,8 @@ body { background-color: var(--bg-main); }
             checkinBtn.classList.add('processing');
             checkinBtn.innerHTML = '<span class="btn-icon">⏳</span> Processing...';
             
-            const now = new Date();
-            const timeStr = now.toTimeString().slice(0, 5); // HH:MM format
+            const now = getEffectiveNow();
+            const timeStr = now.toTimeString().slice(0, 8); // HH:MM:SS format
             
             // Set times for form submission
             document.getElementById('checkinTimeInput').value = timeStr;
@@ -1737,7 +1872,7 @@ body { background-color: var(--bg-main); }
             }
             
             // Friendly warnings based on checkout time window
-            const now = new Date();
+            const now = getEffectiveNow();
             const minutesNow = now.getHours() * 60 + now.getMinutes();
             const minutes1030 = 10 * 60 + 30;
             const minutes1430 = 14 * 60 + 30;
@@ -1769,8 +1904,12 @@ body { background-color: var(--bg-main); }
         function checkAutoCheckout() {
             const hasCheckedIn = <?php echo ($checkInTime && !$checkOutTime && $todayStatus !== 'absent') ? 'true' : 'false'; ?>;
             if (!hasCheckedIn) return;
+            if (hasJustCheckedIn) return;
+
+            const autoCheckoutKey = 'autoCheckoutAttempted-<?php echo $today; ?>';
+            if (sessionStorage.getItem(autoCheckoutKey) === '1') return;
             
-            const now = new Date();
+            const now = getEffectiveNow();
             const currentHour = now.getHours();
             const currentMinute = now.getMinutes();
             
@@ -1778,6 +1917,7 @@ body { background-color: var(--bg-main); }
             if (currentHour > AUTO_CHECKOUT_HOUR || (currentHour === AUTO_CHECKOUT_HOUR && currentMinute >= AUTO_CHECKOUT_MINUTE)) {
                 const checkoutForm = document.getElementById('checkoutForm');
                 if (checkoutForm) {
+                    sessionStorage.setItem(autoCheckoutKey, '1');
                     const autoFlag = document.createElement('input');
                     autoFlag.type = 'hidden';
                     autoFlag.name = 'auto_checkout';
@@ -1800,6 +1940,8 @@ body { background-color: var(--bg-main); }
         
         // Initialize geolocation on page load
         document.addEventListener('DOMContentLoaded', function() {
+            updateAttendanceClock();
+            setInterval(updateAttendanceClock, 1000);
             getLocation();
             
             // Check for auto-checkout on page load

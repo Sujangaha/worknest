@@ -205,7 +205,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 
     $_SESSION['auto_process_message'] = "Auto-processed " . count($requestsWithMetrics) .
         " pending request(s): $approved approved (respecting max " . MAX_CONCURRENT_LEAVES_PER_DAY .
-        " concurrent leave(s) per day), $rejected rejected (attendance/balance), $skippedDueToSlots left pending due to full slots.";
+        " concurrent leave(s) per day), $rejected rejected (attendance/balance).";
     header('Location: leave.php');
     exit;
 }
@@ -223,8 +223,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     
     if ($action === 'approve' || $action === 'reject') {
         $status = $action === 'approve' ? 'approved' : 'rejected';
-        $stmt = $pdo->prepare("UPDATE leaves SET status = ? WHERE id = ?");
-        $stmt->execute([$status, $leaveId]);
+        $adminRemarks = null;
+        if ($action === 'reject') {
+            $adminRemarks = trim($_POST['admin_remarks'] ?? '');
+            if ($adminRemarks === '') {
+                $adminRemarks = null;
+            }
+        }
+        $stmt = $pdo->prepare("UPDATE leaves SET status = ?, admin_remarks = ? WHERE id = ?");
+        $stmt->execute([$status, $adminRemarks, $leaveId]);
     } elseif ($action === 'delete') {
         // Only allow deleting rejected requests
         $stmt = $pdo->prepare("DELETE FROM leaves WHERE id = ? AND status = 'rejected'");
@@ -656,6 +663,42 @@ body.sidebar-open { overflow: hidden; }
     display: inline;
 }
 
+.reject-form {
+    display: flex;
+    align-items: flex-end;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.reject-reason {
+    display: none;
+    align-items: flex-end;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.reject-reason.open {
+    display: flex;
+}
+
+.reject-form textarea {
+    min-width: 220px;
+    max-width: 320px;
+    border: 1px solid var(--border-light);
+    border-radius: 10px;
+    padding: 8px 10px;
+    font-size: 13px;
+    resize: vertical;
+    background: var(--bg-input);
+    color: var(--text-main);
+}
+
+.reject-form textarea:focus {
+    outline: none;
+    border-color: var(--border-accent);
+    box-shadow: 0 0 0 3px rgba(42, 170, 138, 0.1);
+}
+
 .btn-action {
     padding: 10px 20px;
     border-radius: 10px;
@@ -933,7 +976,6 @@ body.sidebar-open { overflow: hidden; }
         <?php if ($pendingCount > 0): ?>
         <div class="auto-process-section">
             <div class="info">
-                <strong>Round Robin Leave Scheduling</strong><br>
                 Process <?= $pendingCount; ?> pending request(s) using a fair queue: checks attendance, leave balance
                 and per-day team slots (max <?= MAX_CONCURRENT_LEAVES_PER_DAY; ?> concurrent leave(s) per day).
             </div>
@@ -1078,6 +1120,12 @@ body.sidebar-open { overflow: hidden; }
                                 <label>Reason</label>
                                 <p><?= htmlspecialchars($leave['reason']); ?></p>
                             </div>
+                            <?php if (!empty($leave['admin_remarks'])): ?>
+                                <div class="request-reason">
+                                    <label>Admin Remarks</label>
+                                    <p><?= htmlspecialchars($leave['admin_remarks']); ?></p>
+                                </div>
+                            <?php endif; ?>
 
                             <div class="request-actions">
                                 <?php if ($leave['status'] === 'pending'): ?>
@@ -1087,11 +1135,20 @@ body.sidebar-open { overflow: hidden; }
                                             ✔ Approve
                                         </button>
                                     </form>
-                                    <form method="POST">
+                                    <form method="POST" class="reject-form" data-reject-form>
                                         <input type="hidden" name="leave_id" value="<?= $leave['id']; ?>">
-                                        <button type="submit" name="action" value="reject" class="btn-action btn-reject">
+                                        <button type="button" class="btn-action btn-reject" onclick="toggleRejectReason(this)">
                                             ✖ Reject
                                         </button>
+                                        <div class="reject-reason">
+                                            <textarea name="admin_remarks" placeholder="Reason for rejection (optional)" rows="2"></textarea>
+                                            <button type="submit" name="action" value="reject" class="btn-action btn-reject">
+                                                ✔ Confirm
+                                            </button>
+                                            <button type="button" class="btn-action btn-delete" onclick="cancelRejectReason(this)">
+                                                ✖ Cancel
+                                            </button>
+                                        </div>
                                     </form>
                                 <?php else: ?>
                                     <span class="action-done">Action completed on <?= date('M d, Y', strtotime($leave['created_at'])); ?></span>
@@ -1110,6 +1167,24 @@ function toggleSidebar() {
     document.getElementById('sidebar').classList.toggle('open');
     document.querySelector('.sidebar-overlay').classList.toggle('active');
     document.body.classList.toggle('sidebar-open');
+}
+
+function toggleRejectReason(button) {
+    const form = button.closest('[data-reject-form]');
+    if (!form) return;
+    const reason = form.querySelector('.reject-reason');
+    if (!reason) return;
+    reason.classList.toggle('open');
+}
+
+function cancelRejectReason(button) {
+    const form = button.closest('[data-reject-form]');
+    if (!form) return;
+    const reason = form.querySelector('.reject-reason');
+    if (!reason) return;
+    const textarea = reason.querySelector('textarea');
+    if (textarea) textarea.value = '';
+    reason.classList.remove('open');
 }
 </script>
 </body>

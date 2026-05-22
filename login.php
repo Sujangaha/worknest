@@ -1,14 +1,37 @@
 <?php
 session_start();
+require 'includes/db.php';
+
+$error = '';
 
 // Check if user is already logged in
 if (isset($_SESSION['user_id'])) {
-    if ($_SESSION['role'] === 'admin') {
-        header('Location: admin/dashboard.php');
+    $pdo = getPDO();
+    $stmt = $pdo->prepare('SELECT id, role FROM users WHERE id = ?');
+    $stmt->execute([$_SESSION['user_id']]);
+    $sessionUser = $stmt->fetch();
+
+    if (!$sessionUser) {
+        // Stale session (user deleted) -> clear it and allow login
+        $_SESSION = [];
+        if (ini_get('session.use_cookies')) {
+            $params = session_get_cookie_params();
+            setcookie(session_name(), '', time() - 42000,
+                $params['path'], $params['domain'],
+                $params['secure'], $params['httponly']
+            );
+        }
+        session_destroy();
+        $error = 'Your session expired. Please sign in again.';
     } else {
-        header('Location: employee/dashboard.php');
+        $role = $sessionUser['role'];
+        if ($role === 'admin') {
+            header('Location: admin/dashboard.php');
+        } else {
+            header('Location: employee/dashboard.php');
+        }
+        exit;
     }
-    exit;
 }
 
 // Check if user came from landing page
@@ -40,9 +63,7 @@ if (!$validAccess && !isset($_SESSION['from_landing'])) {
     exit;
 }
 
-require 'includes/db.php';
-
-$error = '';
+// db already loaded above
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $email = trim($_POST['email']);

@@ -4,6 +4,102 @@ require_once '../../includes/db.php';
 
 $pdo = getPDO();
 
+$isAdmin = ($_SESSION['role'] ?? '') === 'admin';
+$demoMessage = '';
+$demoMessageType = 'success';
+
+// App settings for demo time
+$pdo->exec("\n    CREATE TABLE IF NOT EXISTS app_settings (\n        setting_key VARCHAR(64) PRIMARY KEY,\n        setting_value VARCHAR(255) NOT NULL\n    )\n");
+
+$settings = [];
+$stmt = $pdo->prepare("SELECT setting_key, setting_value FROM app_settings WHERE setting_key IN ('demo_time_enabled', 'demo_time_value', 'demo_time_anchor')");
+$stmt->execute();
+$settings = $stmt->fetchAll(PDO::FETCH_KEY_PAIR);
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'update_demo_time') {
+    if (!$isAdmin) {
+        http_response_code(403);
+        exit;
+    }
+
+    $demoCloseRequested = isset($_POST['demo_close']);
+    $demoActionProvided = array_key_exists('demo_enabled', $_POST);
+    $demoEnabledInput = $settings['demo_time_enabled'] ?? '0';
+    if ($demoActionProvided) {
+        $demoEnabledInput = ($_POST['demo_enabled'] ?? '0') === '1' ? '1' : '0';
+    }
+    $demoTimeInput = trim($_POST['demo_time'] ?? '');
+    if ($demoTimeInput !== '' && strlen($demoTimeInput) === 5) {
+        $demoTimeInput .= ':00';
+    }
+
+    if ($demoTimeInput !== '' && !preg_match('/^\d{2}:\d{2}:\d{2}$/', $demoTimeInput)) {
+        $demoMessage = 'Invalid time format. Please use HH:MM or HH:MM:SS.';
+        $demoMessageType = 'error';
+    } else {
+        if ($demoTimeInput === '') {
+            $demoTimeInput = $settings['demo_time_value'] ?? date('H:i:s');
+        }
+
+        $upsert = $pdo->prepare("\n            INSERT INTO app_settings (setting_key, setting_value)\n            VALUES (?, ?)\n            ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)\n        ");
+        if ($demoActionProvided) {
+            $upsert->execute(['demo_time_enabled', $demoEnabledInput]);
+        }
+        $upsert->execute(['demo_time_value', $demoTimeInput]);
+        if ($demoActionProvided) {
+            if ($demoEnabledInput === '1') {
+                $demoMessage = 'Demo time enabled.';
+                $demoMessageType = 'success';
+            } else {
+                $demoMessage = 'Demo time disabled.';
+                $demoMessageType = 'success';
+            }
+        } else {
+            $demoMessage = '';
+        }
+    }
+
+    if ($demoActionProvided && $demoEnabledInput === '1') {
+        $upsert->execute(['demo_time_anchor', (string)time()]);
+    }
+
+    if ($demoCloseRequested) {
+        $demoMessage = '';
+    }
+
+    $stmt = $pdo->prepare("SELECT setting_key, setting_value FROM app_settings WHERE setting_key IN ('demo_time_enabled', 'demo_time_value', 'demo_time_anchor')");
+    $stmt->execute();
+    $settings = $stmt->fetchAll(PDO::FETCH_KEY_PAIR);
+}
+
+$demoEnabled = ($settings['demo_time_enabled'] ?? '0') === '1';
+$demoTimeValue = $settings['demo_time_value'] ?? '';
+$demoTimeAnchor = isset($settings['demo_time_anchor']) ? (int)$settings['demo_time_anchor'] : 0;
+if ($demoTimeValue !== '' && strlen($demoTimeValue) === 5) {
+    $demoTimeValue .= ':00';
+}
+
+function timeToSeconds($timeValue) {
+    $parts = explode(':', $timeValue);
+    $hours = (int)($parts[0] ?? 0);
+    $minutes = (int)($parts[1] ?? 0);
+    $seconds = (int)($parts[2] ?? 0);
+    return ($hours * 3600) + ($minutes * 60) + $seconds;
+}
+
+if ($demoEnabled && $demoTimeValue) {
+    $baseSeconds = timeToSeconds($demoTimeValue);
+    $elapsed = $demoTimeAnchor > 0 ? (time() - $demoTimeAnchor) : 0;
+    $effectiveSeconds = ($baseSeconds + $elapsed) % 86400;
+    if ($effectiveSeconds < 0) {
+        $effectiveSeconds += 86400;
+    }
+    $effectiveTime = gmdate('H:i:s', $effectiveSeconds);
+} else {
+    $effectiveTime = date('H:i:s');
+}
+
+
 // Get selected date (default to today)
 $selectedDate = $_GET['date'] ?? date('Y-m-d');
 $selectedMonth = $_GET['month'] ?? date('Y-m');
@@ -12,6 +108,7 @@ $selectedMonth = $_GET['month'] ?? date('Y-m');
 $stmt = $pdo->prepare("SELECT id, username, email, department, position FROM users WHERE role = 'employee' ORDER BY username");
 $stmt->execute();
 $employees = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
 
 // Get attendance for selected date
 $stmt = $pdo->prepare("
@@ -88,6 +185,25 @@ body { background: var(--bg-main); color: var(--text-main); }
 .main { flex: 1; padding: 32px 40px; margin-left: 260px; }
 .top-bar { display: flex; align-items: center; gap: 16px; margin-bottom: 8px; }
 .page-title { font-size: 28px; font-weight: 800; }
+.live-clock { margin-left: auto; font-size: 14px; font-weight: 700; color: var(--text-muted); background: var(--bg-card); border: 1px solid var(--border-light); padding: 6px 12px; border-radius: 999px; letter-spacing: 0.6px; min-width: 120px; text-align: center; }
+.menu-button { display: flex; align-items: center; gap: 14px; width: 100%; padding: 14px 16px; border-radius: 12px; border: 1px dashed var(--border-accent); background: var(--bg-input); color: var(--text-main); font-weight: 600; font-size: 14px; cursor: pointer; transition: all 0.3s; }
+.menu-button:hover { background: var(--bg-card); box-shadow: var(--shadow-sm); transform: translateX(4px); }
+.demo-card { display: none; }
+.demo-card.open { display: block; }
+.demo-form { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-end; }
+.demo-form .field { display: flex; flex-direction: column; gap: 6px; min-width: 180px; }
+.demo-form label { font-size: 12px; color: var(--text-muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.6px; }
+.demo-form input[type="time"] { padding: 10px 12px; border: 2px solid var(--border-light); border-radius: 10px; font-size: 14px; background: var(--bg-card); }
+.demo-form input[type="time"]:focus { outline: none; border-color: var(--primary-orange); }
+.demo-form .actions-group { display: flex; align-items: center; gap: 12px; margin-left: auto; }
+.demo-status { font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 999px; text-transform: uppercase; letter-spacing: 0.8px; }
+.demo-status.active { background: #dcfce7; color: #16a34a; border: 1px solid #86efac; }
+.demo-status.off { background: #f3f4f6; color: #6b7280; border: 1px solid #e5e7eb; }
+.demo-close { width: 28px; height: 28px; border: none; border-radius: 8px; background: #fef2f2; color: #dc2626; cursor: pointer; font-size: 16px; display: inline-flex; align-items: center; justify-content: center; transition: all 0.2s ease; }
+.demo-close:hover { background: #fee2e2; transform: translateY(-1px); }
+.demo-message { margin-top: 12px; font-size: 13px; font-weight: 600; }
+.demo-message.success { color: #16a34a; }
+.demo-message.error { color: #dc2626; }
 .hamburger { display: none; flex-direction: column; justify-content: center; align-items: center; width: 40px; height: 40px; background: var(--bg-card); border: 1px solid var(--border-accent); border-radius: 8px; cursor: pointer; gap: 5px; }
 .hamburger span { display: block; width: 20px; height: 2px; background: var(--text-main); }
 .subtitle { color: var(--text-muted); margin-bottom: 24px; }
@@ -187,6 +303,9 @@ body { background: var(--bg-main); color: var(--text-main); }
             <a href="../leave/leave.php"><span class="icon">🗓️</span> Leave Requests</a>
             <a href="../notice/notices.php"><span class="icon">📢</span> Notices</a>
         </nav>
+        <?php if ($isAdmin): ?>
+            <button type="button" class="menu-button" onclick="toggleDemoPanel()">🧪 Demo Time</button>
+        <?php endif; ?>
         <div class="sidebar-footer">
             <a href="../../logout.php"><span class="icon">🚪</span> Logout</a>
         </div>
@@ -196,8 +315,41 @@ body { background: var(--bg-main); color: var(--text-main); }
         <div class="top-bar">
             <button class="hamburger" onclick="toggleSidebar()"><span></span><span></span><span></span></button>
             <h1 class="page-title">Attendance</h1>
+            <div class="live-clock" id="attendanceClock" aria-live="polite"></div>
         </div>
         <p class="subtitle">Monitor employee attendance for <?= date('F d, Y', strtotime($selectedDate)); ?></p>
+
+        <?php if ($isAdmin): ?>
+            <div class="card demo-card <?= $demoMessage ? 'open' : ''; ?>" id="demoPanel">
+                <div class="card-header">
+                    <h2>🧪 Demo Time Control</h2>
+                    <span class="demo-status <?= $demoEnabled ? 'active' : 'off'; ?>">
+                        <?= $demoEnabled ? 'Demo Active' : 'Normal Mode'; ?>
+                    </span>
+                    <form method="POST" style="margin-left: auto;" onsubmit="return closeDemoPanel();">
+                        <input type="hidden" name="action" value="update_demo_time">
+                        <input type="hidden" name="demo_enabled" value="0">
+                        <input type="hidden" name="demo_close" value="1">
+                        <button type="submit" class="demo-close" title="Exit demo mode" aria-label="Exit demo mode">✕</button>
+                    </form>
+                </div>
+                <form method="POST" class="demo-form">
+                    <input type="hidden" name="action" value="update_demo_time">
+                    <div class="field">
+                        <label for="demoTimeInput">Demo Time</label>
+                        <input type="time" id="demoTimeInput" name="demo_time" step="1" value="<?= htmlspecialchars($demoTimeValue ?: date('H:i:s')); ?>">
+                    </div>
+                    <div class="actions-group">
+                        <button type="submit" class="btn btn-primary" name="demo_enabled" value="1">Enable Demo</button>
+                        <button type="submit" class="btn btn-secondary" name="demo_enabled" value="0">Disable Demo</button>
+                    </div>
+                </form>
+                <p style="margin-top: 10px; font-size: 12px; color: var(--text-muted);">When enabled, all attendance logic uses the demo time.</p>
+                <?php if ($demoMessage): ?>
+                    <div class="demo-message <?= htmlspecialchars($demoMessageType); ?>"><?= htmlspecialchars($demoMessage); ?></div>
+                <?php endif; ?>
+            </div>
+        <?php endif; ?>
 
         <!-- Stats Grid -->
         <div class="stats-grid">
@@ -309,10 +461,78 @@ body { background: var(--bg-main); color: var(--text-main); }
 </div>
 
 <script>
+const DEMO_TIME_ENABLED = <?= $demoEnabled ? 'true' : 'false'; ?>;
+const DEMO_TIME_VALUE = <?= json_encode($demoTimeValue); ?>;
+const DEMO_TIME_ANCHOR = <?= json_encode($demoTimeAnchor); ?>;
+
 function toggleSidebar() {
     document.getElementById('sidebar').classList.toggle('open');
     document.querySelector('.sidebar-overlay').classList.toggle('active');
 }
+
+function toggleDemoPanel() {
+    const panel = document.getElementById('demoPanel');
+    if (!panel) return;
+    panel.classList.toggle('open');
+}
+
+function closeDemoPanel() {
+    const panel = document.getElementById('demoPanel');
+    if (panel) {
+        panel.classList.remove('open');
+    }
+    return true;
+}
+
+function timeToSeconds(timeValue) {
+    const parts = timeValue.split(':');
+    const hours = parseInt(parts[0] || '0', 10);
+    const minutes = parseInt(parts[1] || '0', 10);
+    const seconds = parseInt(parts[2] || '0', 10);
+    return (hours * 3600) + (minutes * 60) + seconds;
+}
+
+function getEffectiveNow() {
+    if (!DEMO_TIME_ENABLED || !DEMO_TIME_VALUE) {
+        return new Date();
+    }
+
+    const anchor = DEMO_TIME_ANCHOR ? new Date(DEMO_TIME_ANCHOR * 1000) : new Date();
+    const elapsedSeconds = Math.floor((Date.now() - anchor.getTime()) / 1000);
+    const baseSeconds = timeToSeconds(DEMO_TIME_VALUE);
+    const effectiveSeconds = (baseSeconds + elapsedSeconds) % 86400;
+
+    const effective = new Date();
+    effective.setHours(0, 0, 0, 0);
+    effective.setSeconds(effectiveSeconds);
+    return effective;
+}
+
+function formatClockTime(date) {
+    let hours = date.getHours();
+    const minutes = date.getMinutes();
+    const seconds = date.getSeconds();
+    const period = hours >= 12 ? 'pm' : 'am';
+    hours = hours % 12;
+    hours = hours ? hours : 12;
+
+    const hh = String(hours).padStart(2, '0');
+    const mm = String(minutes).padStart(2, '0');
+    const ss = String(seconds).padStart(2, '0');
+
+    return `${hh}:${mm}:${ss} ${period}`;
+}
+
+function updateAttendanceClock() {
+    const clock = document.getElementById('attendanceClock');
+    if (!clock) return;
+    clock.textContent = formatClockTime(getEffectiveNow());
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    updateAttendanceClock();
+    setInterval(updateAttendanceClock, 1000);
+});
 </script>
 </body>
 </html>
